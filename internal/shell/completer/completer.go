@@ -45,11 +45,25 @@ func (c *ShellCompleter) Do(line []rune, pos int) (newLine [][]rune, length int)
 		return [][]rune{[]rune(m)}, offset
 	}
 
-	// Complete as far as all suffixes agree.
-	lcp := longestCommonPrefix(uniqueMatches)
-	if lcp != "" {
+	matchBase := typed
+	if offset > 0 && offset <= len(typed) {
+		matchBase = typed[:offset]
+	}
+	fullNames := make([]string, 0, len(uniqueMatches))
+	for _, suffix := range uniqueMatches {
+		fullNames = append(fullNames, matchBase+strings.TrimSpace(suffix))
+	}
+	lcp := longestCommonPrefix(fullNames)
+	if len(lcp) > len(typed) {
 		c.tabPressed = false
-		return [][]rune{[]rune(lcp)}, offset
+		return [][]rune{[]rune(lcp[len(typed):])}, offset
+	}
+
+	// Complete as far as all suffixes agree.
+	suffixLCP := longestCommonPrefix(uniqueMatches)
+	if suffixLCP != "" {
+		c.tabPressed = false
+		return [][]rune{[]rune(suffixLCP)}, offset
 	}
 
 	if !c.tabPressed {
@@ -59,13 +73,13 @@ func (c *ShellCompleter) Do(line []rune, pos int) (newLine [][]rune, length int)
 	}
 
 	// Second tab: list full candidate names, then redraw the prompt line.
-	prefix := ""
+	displayPrefix := typed
 	if offset > 0 && offset <= len(typed) {
-		prefix = typed[len(typed)-offset:]
+		displayPrefix = typed[len(typed)-offset:]
 	}
 	names := make([]string, 0, len(uniqueMatches))
 	for _, suffix := range uniqueMatches {
-		names = append(names, prefix+strings.TrimSpace(suffix))
+		names = append(names, displayPrefix+strings.TrimSpace(suffix))
 	}
 	slices.Sort(names)
 	fmt.Printf("\n%s\n", strings.Join(names, "  "))

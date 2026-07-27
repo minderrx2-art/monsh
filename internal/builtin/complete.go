@@ -24,6 +24,10 @@ func NewCompleteCommand() *CompleteCommand {
 	}
 }
 
+func (c *CompleteCommand) Unregister(name string) {
+	delete(c.savedCompletions, name)
+}
+
 func (c *CompleteCommand) Complete(args []string) {
 	if len(args) == 0 {
 		names := mapsKeys(c.savedCompletions)
@@ -45,6 +49,8 @@ func (c *CompleteCommand) Complete(args []string) {
 		fmt.Printf("complete -C '%s' %s\n", path, args[1])
 	case "-C":
 		c.Register(args[2], args[1])
+	case "-r":
+		c.Unregister(args[1])
 	default:
 		fmt.Printf("complete: %s: no completion specification\n", args[0])
 	}

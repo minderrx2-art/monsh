@@ -184,16 +184,16 @@ func ListProgrammable(line string, registry CompleterRegistry) []string {
 		return nil
 	}
 
-	out, err := exec.Command(completerPath).Output()
-	if err != nil {
+	candidates := runProgrammableCompleter(completerPath, line)
+	if len(candidates) == 0 {
 		return nil
 	}
 
 	word := wordBeingCompleted(line)
 	argPrefix := argPrefixBeforeLastWord(line)
 
-	names := make([]string, 0)
-	for _, candidate := range strings.Split(string(out), "\n") {
+	names := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
 		candidate = strings.TrimRight(candidate, "\r")
 		if candidate == "" {
 			continue
