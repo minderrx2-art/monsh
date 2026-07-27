@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+type CompleterRegistry interface {
+	Get(name string) (string, bool)
+}
+
 var shellBuiltins = map[string]struct{}{
 	"cd": {}, "echo": {}, "exit": {}, "pwd": {}, "type": {},
 }
@@ -56,7 +60,7 @@ func FindExecutable(binary string) (string, error) {
 	return path, nil
 }
 
-func firstWord(line string) string {
+func getFirstWord(line string) string {
 	line = strings.TrimLeft(line, " \t")
 	if line == "" {
 		return ""
@@ -79,14 +83,19 @@ func completingArgs(line string) bool {
 	return strings.Contains(strings.TrimLeft(line, " \t"), " ")
 }
 
-func ListExecutables(line string) []string {
-	word := firstWord(line)
+func ListExecutables(line string, registry CompleterRegistry) []string {
+	word := getFirstWord(line)
 	if word == "" {
 		return nil
 	}
 	if completingArgs(line) {
 		if _, builtin := shellBuiltins[word]; builtin {
 			return nil
+		}
+		if registry != nil {
+			if _, ok := registry.Get(word); ok {
+				return []string{word}
+			}
 		}
 		if _, err := exec.LookPath(word); err == nil {
 			return []string{word}
@@ -109,7 +118,7 @@ func ListExecutables(line string) []string {
 
 func argPrefixBeforeLastWord(line string) string {
 	trimmed := strings.TrimLeft(line, " \t")
-	cmd := firstWord(trimmed)
+	cmd := getFirstWord(trimmed)
 	rest := strings.TrimLeft(trimmed[len(cmd):], " \t")
 	if i := strings.LastIndex(rest, " "); i >= 0 {
 		return rest[:i+1]
@@ -117,9 +126,15 @@ func argPrefixBeforeLastWord(line string) string {
 	return ""
 }
 
-func ListFiles(line string) []string {
+func ListFiles(line string, registry CompleterRegistry) []string {
 	if !completingArgs(line) {
 		return nil
+	}
+
+	if registry != nil {
+		if _, ok := registry.Get(getFirstWord(line)); ok {
+			return nil
+		}
 	}
 
 	word := wordBeingCompleted(line)
@@ -155,6 +170,38 @@ func ListFiles(line string) []string {
 			name += "/"
 		}
 		names = append(names, argPrefix+name)
+	}
+	return names
+}
+
+func ListProgrammable(line string, registry CompleterRegistry) []string {
+	if !completingArgs(line) {
+		return nil
+	}
+
+	completerPath, ok := registry.Get(getFirstWord(line))
+	if !ok {
+		return nil
+	}
+
+	out, err := exec.Command(completerPath).Output()
+	if err != nil {
+		return nil
+	}
+
+	word := wordBeingCompleted(line)
+	argPrefix := argPrefixBeforeLastWord(line)
+
+	names := make([]string, 0)
+	for _, candidate := range strings.Split(string(out), "\n") {
+		candidate = strings.TrimRight(candidate, "\r")
+		if candidate == "" {
+			continue
+		}
+		if word != "" && !strings.HasPrefix(candidate, word) {
+			continue
+		}
+		names = append(names, argPrefix+candidate)
 	}
 	return names
 }

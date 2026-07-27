@@ -14,7 +14,7 @@ import (
 	"github.com/minderrx2-art/monsh/internal/shell/completer"
 )
 
-func newReader() (*readline.Instance, error) {
+func newReader(builtins *Builtins) (*readline.Instance, error) {
 	l, err := readline.NewEx(&readline.Config{
 		Prompt:          "$ ",
 		HistoryFile:     "/tmp/monsh.tmp",
@@ -24,12 +24,21 @@ func newReader() (*readline.Instance, error) {
 			ReadlineCompleter: *readline.NewPrefixCompleter(
 				readline.PcItem("exit"),
 				readline.PcItem("pwd"),
-				readline.PcItem("cd", readline.PcItemDynamic(path.ListFiles)),
+				readline.PcItem("cd", readline.PcItemDynamic(func(line string) []string {
+					return path.ListFiles(line, builtins.c)
+				})),
 				readline.PcItem("type"),
 				readline.PcItem("complete"),
 				readline.PcItem("echo"),
-				readline.PcItemDynamic(path.ListExecutables,
-					readline.PcItemDynamic(path.ListFiles),
+				readline.PcItemDynamic(func(line string) []string {
+					return path.ListExecutables(line, builtins.c)
+				},
+					readline.PcItemDynamic(func(line string) []string {
+						return path.ListProgrammable(line, builtins.c)
+					}),
+					readline.PcItemDynamic(func(line string) []string {
+						return path.ListFiles(line, builtins.c)
+					}),
 				),
 			),
 		},
@@ -40,15 +49,15 @@ func newReader() (*readline.Instance, error) {
 	return l, nil
 }
 
-type builtins struct {
+type Builtins struct {
 	c *builtin.CompleteCommand
 }
 
 func Start() error {
-	builtins := &builtins{
+	builtins := &Builtins{
 		c: builtin.NewCompleteCommand(),
 	}
-	reader, err := newReader()
+	reader, err := newReader(builtins)
 	if err != nil {
 		return err
 	}
@@ -101,7 +110,7 @@ func Start() error {
 	return nil
 }
 
-func builtinRouter(command string, rest []string, builtins *builtins) func() {
+func builtinRouter(command string, rest []string, builtins *Builtins) func() {
 	switch command {
 	case "type":
 		return func() { builtin.Type(rest[0]) }
